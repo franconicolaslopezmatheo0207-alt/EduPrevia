@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Previas App (Demo)</title>
+  <style>
+    :root{--accent:#4a90e2;--muted:#666}
+    *{box-sizing:border-box;font-family:Inter,system-ui,Arial,Helvetica,sans-serif}
+    body{margin:0;background:#f5f7fb;color:#222}
+    header{background:linear-gradient(90deg,var(--accent),#6fb1ff);color:white;padding:16px}
+    .wrap{max-width:1000px;margin:20px auto;padding:18px;background:white;border-radius:12px;box-shadow:0 6px 20px rgba(20,30,60,0.06)}
+    h1{margin:.2rem 0}
+    .grid{display:grid;gap:12px}
+    .cols-2{grid-template-columns:1fr 320px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input,select,textarea,button{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #e2e8f0;background:white}
+    button{cursor:pointer;border:none}
+    .btn{background:var(--accent);color:white;padding:8px 10px;border-radius:8px}
+    .muted{color:var(--muted);font-size:13px}
+    .card{padding:12px;border-radius:10px;border:1px solid #eef2f7;background:#fff}
+    .list{list-style:none;padding:0;margin:0}
+    .item{padding:8px;border-radius:8px;border:1px dashed #eef2f7;margin-bottom:8px}
+    .small{font-size:13px;color:#444}
+    .danger{background:#fff4f4;border-color:#ffdede}
+    .topbar{display:flex;justify-content:space-between;align-items:center}
+    .row{display:flex;gap:8px}
+    .tag{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #eef2f7;font-size:12px}
+    footer{margin:18px 0;text-align:center;color:var(--muted)}
+    .hidden{display:none}
+    .notice{background:#fff8e6;padding:10px;border-radius:8px;border:1px solid #ffecb5}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap topbar">
+      <div>
+        <h1>Previas App — Demo</h1>
+        <div class="muted">Inicia sesión como Alumno / Profesor / Preceptor</div>
+      </div>
+      <div id="currentUserDisplay" class="muted"></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- LOGIN -->
+    <section id="loginSection">
+      <div class="grid cols-2">
+        <div>
+          <div class="card">
+            <h2>Iniciar sesión</h2>
+            <label>Rol</label>
+            <select id="loginRole">
+              <option value="student">Alumno</option>
+              <option value="teacher">Profesor</option>
+              <option value="preceptor">Preceptor</option>
+            </select>
+            <label>Email</label>
+            <input id="loginEmail" placeholder="ej: alumno1@escuela.local" />
+            <label>Contraseña</label>
+            <input id="loginPass" type="password" placeholder="contraseña" />
+            <div style="margin-top:10px;display:flex;gap:8px">
+              <button class="btn" id="btnLogin">Iniciar</button>
+              <button id="btnSample" title="Crea datos de ejemplo">Cargar demo</button>
+            </div>
+            <div style="margin-top:8px" class="muted">Si no tenés cuenta, el Preceptor puede crear el alumno desde su panel.</div>
+          </div>
+
+          <div class="card" style="margin-top:12px">
+            <h3>¿Qué hace cada rol?</h3>
+            <ul>
+              <li class="muted">Preceptor: crea alumnos, marca materias adeudadas y anuncia fechas importantes.</li>
+              <li class="muted">Profesor: crea temas por materia que luego verán los alumnos adeudantes.</li>
+              <li class="muted">Alumno: ve sus materias adeudadas y los temas/fechas correspondientes.</li>
+            </ul>
+          </div>
+
+        </div>
+
+        <aside>
+          <div class="card">
+            <h3>Avisos Importantes</h3>
+            <div id="noticesArea" class="muted">Sin avisos</div>
+          </div>
+
+          <div class="card" style="margin-top:12px">
+            <h3>Atajos Demo</h3>
+            <button id="loginAsStudent">Entrar como Alumno demo</button>
+            <button id="loginAsTeacher" style="margin-top:6px">Entrar como Profesor demo</button>
+            <button id="loginAsPreceptor" style="margin-top:6px">Entrar como Preceptor demo</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- DASHBOARD (role-specific) -->
+    <section id="dashboardSection" class="hidden">
+      <div class="topbar">
+        <h2 id="dashTitle">Dashboard</h2>
+        <div class="row">
+          <div id="roleLabel" class="tag">Rol</div>
+          <button id="btnLogout">Cerrar sesión</button>
+        </div>
+      </div>
+
+      <div id="dashContent" style="margin-top:12px"></div>
+    </section>
+
+    <footer>
+      <small class="muted">Demo local — los datos se guardan en localStorage del navegador.</small>
+    </footer>
+  </main>
+
+  <script>
+    // --- Almacenamiento local simple ---
+    const STORE_USERS = 'pv_users';
+    const STORE_SUBS = 'pv_subjects';
+    const STORE_NOTICES = 'pv_notices';
+
+    function save(key, value){localStorage.setItem(key, JSON.stringify(value));}
+    function load(key, fallback){const v = localStorage.getItem(key); return v? JSON.parse(v) : fallback;}
+
+    // Inicializa demo si no hay datos
+    function ensureDemo(){
+      let users = load(STORE_USERS, null);
+      if(!users){
+        users = [
+          {role:'preceptor',email:'preceptor@esc.local',pass:'precep',name:'Mariana Precep'},
+          {role:'teacher',email:'prof_martin@esc.local',pass:'prof',name:'Martín Gómez',subjects:['Matemática']},
+          {role:'student',email:'alumno1@esc.local',pass:'alumno',name:'Ana López',dni:'12345678',owed:['Matemática']},
+        ];
+        save(STORE_USERS, users);
+      }
+      let subjects = load(STORE_SUBS, null);
+      if(!subjects){
+        subjects = {
+          'Matemática':{topics:[{title:'Álgebra básica',date:'2025-12-10',desc:'Ecuaciones, factorización'}],teachers:['prof_martin@esc.local']}
+        };
+        save(STORE_SUBS, subjects);
+      }
+      let notices = load(STORE_NOTICES, null);
+      if(!notices){
+        notices = [{id:1,by:'preceptor@esc.local',subject:'Matemática',date:'2025-12-10',msg:'Previo de Matemática en aula 3, traer calculadora'}];
+        save(STORE_NOTICES, notices);
+      }
+    }
+
+    // UX helpers
+    const $ = id => document.getElementById(id);
+    function show(id){$(id).classList.remove('hidden');}
+    function hide(id){$(id).classList.add('hidden');}
+
+    // --- Login logic ---
+    function login(role,email,pass){
+      const users = load(STORE_USERS, []);
+      const u = users.find(x=>x.email===email && x.pass===pass && x.role===role);
+      if(!u) return null;
+      sessionStorage.setItem('pv_current', JSON.stringify(u));
+      return u;
+    }
+    function logout(){sessionStorage.removeItem('pv_current'); location.reload();}
+
+    // --- Render notices in sidebar ---
+    function renderNotices(){
+      const notices = load(STORE_NOTICES, []);
+      const el = $('noticesArea');
+      if(notices.length===0) return el.innerHTML='Sin avisos';
+      el.innerHTML = notices.map(n=>`<div class="notice"><strong>${n.subject}</strong> — ${n.date}<div class="muted">${n.msg}</div></div>`).join('');
+    }
+
+    // --- Dashboards ---
+    function renderDashboard(){
+      const cur = JSON.parse(sessionStorage.getItem('pv_current')||'null');
+      if(!cur) return;
+      hide('loginSection'); show('dashboardSection');
+      $('currentUserDisplay').textContent = cur.name+' ('+cur.email+')';
+      $('dashTitle').textContent = `Bienvenido, ${cur.name}`;
+      $('roleLabel').textContent = cur.role.toUpperCase();
+
+      const content = $('dashContent'); content.innerHTML='';
+      renderNotices();
+
+      if(cur.role==='preceptor') renderPreceptor(content, cur);
+      if(cur.role==='teacher') renderTeacher(content, cur);
+      if(cur.role==='student') renderStudent(content, cur);
+    }
+
+    // Preceptor: crear alumno, marcar materia adeudada, crear aviso
+    function renderPreceptor(container, cur){
+      const users = load(STORE_USERS, []);
+      container.innerHTML = `
+        <div class="grid cols-2">
+          <div>
+            <div class="card">
+              <h3>Crear alumno</h3>
+              <label>Nombre completo</label><input id="p_name" />
+              <label>DNI</label><input id="p_dni" />
+              <label>Email</label><input id="p_email" />
+              <label>Contraseña</label><input id="p_pass" />
+              <button class="btn" id="p_create">Crear alumno</button>
+              <div id="p_msg" class="muted"></div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <h3>Marcar materia adeudada (al alumno)</h3>
+              <label>Seleccionar alumno</label>
+              <select id="p_select_student"></select>
+              <label>Materia</label><input id="p_subject_name" placeholder="ej: Física" />
+              <label>Fecha prevista</label><input id="p_subject_date" type="date" />
+              <button id="p_add_owed">Agregar adeuda</button>
+              <div id="p_msg2" class="muted"></div>
+            </div>
+          </div>
+
+          <aside>
+            <div class="card">
+              <h3>Crear Aviso (Importante)</h3>
+              <label>Materia</label><input id="n_subject" />
+              <label>Fecha</label><input id="n_date" type="date" />
+              <label>Mensaje</label><textarea id="n_msg"></textarea>
+              <button id="n_create">Publicar aviso</button>
+              <div id="n_status" class="muted"></div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <h3>Lista de alumnos</h3>
+              <div id="p_students_list" class="muted"></div>
+            </div>
+          </aside>
+        </div>
+      `;
+
+      // populate students select
+      function refreshStudentsArea(){
+        const users = load(STORE_USERS, []);
+        const students = users.filter(u=>u.role==='student');
+        const sel = $('p_select_student'); sel.innerHTML='';
+        students.forEach(s=>{ const opt = document.createElement('option'); opt.value=s.email; opt.textContent=`${s.name} (${s.dni||'-'})`; sel.appendChild(opt); });
+        $('p_students_list').innerHTML = students.map(s=>`<div class=item><strong>${s.name}</strong><div class=muted>DNI: ${s.dni||'-'}</div><div class=small>Adeudas: ${(s.owed||[]).join(', ')||'Ninguna'}</div></div>`).join('');
+      }
+      refreshStudentsArea();
+
+      $('p_create').onclick = ()=>{
+        const name = $('p_name').value.trim(); const dni=$('p_dni').value.trim(); const email=$('p_email').value.trim(); const pass=$('p_pass').value.trim();
+        if(!name||!email||!pass){$('p_msg').textContent='Completá nombre, email y contraseña';return}
+        const users = load(STORE_USERS,[]);
+        if(users.find(u=>u.email===email)){ $('p_msg').textContent='Ya existe ese email'; return }
+        users.push({role:'student',name, email, pass, dni, owed:[]}); save(STORE_USERS, users); $('p_msg').textContent='Alumno creado'; $('p_name').value=''; $('p_email').value=''; $('p_pass').value='';
+        refreshStudentsArea();
+      };
+
+      $('p_add_owed').onclick = ()=>{
+        const sel = $('p_select_student').value; const subj = $('p_subject_name').value.trim(); const date = $('p_subject_date').value;
+        if(!sel||!subj){$('p_msg2').textContent='Elegí alumno y materia';return}
+        const users = load(STORE_USERS,[]);
+        const s = users.find(u=>u.email===sel);
+        if(!s) return;
+        s.owed = s.owed||[];
+        if(!s.owed.includes(subj)) s.owed.push(subj);
+        save(STORE_USERS, users);
+
+        // asegurarse que la materia exista en subjects
+        const subs = load(STORE_SUBS,{});
+        subs[subj] = subs[subj] || {topics:[], teachers:[]};
+        save(STORE_SUBS, subs);
+
+        // crear un aviso opcional si hay fecha
+        if(date){
+          const notices = load(STORE_NOTICES,[]);
+          notices.push({id:Date.now(),by:cur.email,subject:subj,date:date,msg:`Previo programado para ${subj}`});
+          save(STORE_NOTICES, notices);
+        }
+        $('p_msg2').textContent=`Materia ${subj} agregada a ${s.name}`;
+        refreshStudentsArea(); renderNotices();
+      };
+
+      $('n_create').onclick = ()=>{
+        const subj=$('n_subject').value.trim(); const date=$('n_date').value; const msg=$('n_msg').value.trim();
+        if(!subj||!date||!msg){$('n_status').textContent='Completá todos los campos';return}
+        const notices = load(STORE_NOTICES,[]);
+        notices.push({id:Date.now(),by:cur.email,subject:subj,date:date,msg}); save(STORE_NOTICES,notices);
+        $('n_status').textContent='Aviso publicado'; $('n_subject').value=''; $('n_msg').value=''; $('n_date').value=''; renderNotices();
+      };
+    }
+
+    // Profesor: elegir materia que dicta, crear temas (que aparecen a los alumnos que adeudan esa materia)
+    function renderTeacher(container, cur){
+      container.innerHTML = `
+        <div class="grid cols-2">
+          <div>
+            <div class="card">
+              <h3>Mis materias</h3>
+              <label>Agregar materia que dictás</label>
+              <input id="t_subj_name" placeholder="Ej: Matemática" />
+              <button id="t_add_subj">Añadir materia</button>
+              <div id="t_subj_list" class="muted"></div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <h3>Crear tema para una materia</h3>
+              <label>Materia</label><select id="t_select_subj"></select>
+              <label>Título del tema</label><input id="t_topic_title" />
+              <label>Fecha del parcial</label><input id="t_topic_date" type="date" />
+              <label>Descripción</label><textarea id="t_topic_desc"></textarea>
+              <button class="btn" id="t_create_topic">Publicar tema</button>
+              <div id="t_status" class="muted"></div>
+            </div>
+          </div>
+
+          <aside>
+            <div class="card">
+              <h3>Ver temas por materia</h3>
+              <div id="t_topics_area" class="muted">Sin temas</div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <h3>Alumnos adeudantes por materia</h3>
+              <div id="t_students_owed" class="muted">-</div>
+            </div>
+          </aside>
+        </div>
+      `;
+
+      function refreshSubjects(){
+        const subs = load(STORE_SUBS, {});
+        const keys = Object.keys(subs);
+        $('t_subj_list').innerHTML = keys.join(', ') || 'Ninguna';
+        const sel = $('t_select_subj'); sel.innerHTML = '';
+        keys.forEach(k=>{ const op = document.createElement('option'); op.value=k; op.textContent=k; sel.appendChild(op); });
+        renderTopics(); renderOwedBySub();
+      }
+
+      $('t_add_subj').onclick = ()=>{
+        const n = $('t_subj_name').value.trim(); if(!n) return;
+        const subs = load(STORE_SUBS,{}); subs[n] = subs[n] || {topics:[], teachers:[]};
+        if(!subs[n].teachers.includes(cur.email)) subs[n].teachers.push(cur.email);
+        save(STORE_SUBS, subs); $('t_subj_name').value=''; refreshSubjects();
+      };
+
+      $('t_create_topic').onclick = ()=>{
+        const subj = $('t_select_subj').value; const title=$('t_topic_title').value.trim(); const date=$('t_topic_date').value; const desc=$('t_topic_desc').value.trim();
+        if(!subj||!title||!date){$('t_status').textContent='Completá materia, título y fecha';return}
+        const subs = load(STORE_SUBS,{});
+        subs[subj] = subs[subj] || {topics:[], teachers:[]};
+        subs[subj].topics.push({title,date,desc,by:cur.email});
+        if(!subs[subj].teachers.includes(cur.email)) subs[subj].teachers.push(cur.email);
+        save(STORE_SUBS, subs);
+        $('t_status').textContent='Tema agregado'; $('t_topic_title').value=''; $('t_topic_date').value=''; $('t_topic_desc').value='';
+        renderTopics();
+      };
+
+      function renderTopics(){
+        const subs = load(STORE_SUBS,{});
+        const sel = $('t_select_subj'); if(!sel) return;
+        const s = subs[sel.value] || {topics:[]};
+        $('t_topics_area').innerHTML = s.topics.length? s.topics.map(t=>`<div class=item><strong>${t.title}</strong> <div class=muted>${t.date} — ${t.by || ''}</div><div class=small>${t.desc||''}</div></div>`).join('') : 'Sin temas';
+      }
+
+      function renderOwedBySub(){
+        const users = load(STORE_USERS,[]); const subs = load(STORE_SUBS,{});
+        const out = Object.entries(subs).map(([k,v])=>{
+          const owed = users.filter(u=>u.role==='student' && (u.owed||[]).includes(k));
+          return `<div class=item><strong>${k}</strong><div class=small>Adeudantes: ${owed.length} — ${owed.map(s=>s.name).join(', ')}</div></div>`;
+        }).join('');
+        $('t_students_owed').innerHTML = out || 'Sin materias registradas';
+      }
+
+      $('t_select_subj')?.addEventListener('change',renderTopics);
+      refreshSubjects();
+    }
+
+    // Alumno: ver lista de materias adeudadas, abrir materia y ver temas + avisos
+    function renderStudent(container, cur){
+      container.innerHTML = `
+        <div class="grid cols-2">
+          <div>
+            <div class="card">
+              <h3>Tus materias adeudadas</h3>
+              <div id="s_owed_list" class="muted"></div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <h3>Detalle de la materia</h3>
+              <div id="s_subject_detail" class="muted">Seleccioná una materia</div>
+            </div>
+          </div>
+
+          <aside>
+            <div class="card">
+              <h3>Avisos importantes (preceptor)</h3>
+              <div id="s_notices" class="muted">-</div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <h3>Mi información</h3>
+              <div class="small">Nombre: ${cur.name}</div>
+              <div class="small">DNI: ${cur.dni||'-'}</div>
+            </div>
+          </aside>
+        </div>
+      `;
+
+      function refreshOwed(){
+        const users = load(STORE_USERS,[]); const me = users.find(u=>u.email===cur.email);
+        const owed = (me.owed||[]);
+        const el = $('s_owed_list');
+        if(!owed.length) return el.innerHTML = '<div class=item>No adeudás ninguna materia 🎉</div>';
+        el.innerHTML = owed.map(sub=>`<div class=item><strong>${sub}</strong><div class=small><button data-sub="${sub}" class="view_sub">Ver temas</button></div></div>`).join('');
+        document.querySelectorAll('.view_sub').forEach(btn=>btn.onclick = e=>{ showSubjectDetail(e.target.dataset.sub); });
+      }
+
+      function showSubjectDetail(sub){
+        const subs = load(STORE_SUBS,{}); const s = subs[sub] || {topics:[]};
+        const notices = load(STORE_NOTICES,[]).filter(n=>n.subject===sub);
+        $('s_subject_detail').innerHTML = `
+          <h4>${sub}</h4>
+          <div><strong>Temas programados:</strong></div>
+          ${s.topics.length? s.topics.map(t=>`<div class=item><strong>${t.title}</strong><div class=muted>${t.date}</div><div class=small>${t.desc||''}</div></div>`).join('') : '<div class=muted>Sin temas publicados por el profesor</div>'}
+          <div style="margin-top:8px"><strong>Avisos para esta materia:</strong></div>
+          ${notices.length? notices.map(n=>`<div class=item><div class=muted>${n.date}</div><div class=small>${n.msg}</div></div>`).join('') : '<div class=muted>Sin avisos</div>'}
+        `;
+      }
+
+      function refreshNoticesPanel(){
+        const notices = load(STORE_NOTICES,[]);
+        $('s_notices').innerHTML = notices.length? notices.map(n=>`<div class=item><strong>${n.subject}</strong><div class=muted>${n.date}</div><div class=small>${n.msg}</div></div>`).join('') : 'Sin avisos';
+      }
+
+      refreshOwed(); refreshNoticesPanel();
+    }
+
+    // --- Buttons & events ---
+    document.addEventListener('DOMContentLoaded', ()=>{
+      ensureDemo(); renderNotices();
+
+      $('btnSample').onclick = ()=>{ ensureDemo(); renderNotices(); alert('Datos demo creados/asegurados en localStorage'); };
+      $('btnLogin').onclick = ()=>{
+        const role = $('loginRole').value; const email=$('loginEmail').value.trim(); const pass=$('loginPass').value;
+        const u = login(role,email,pass);
+        if(!u){ alert('Credenciales inválidas o rol incorrecto'); return }
+        renderDashboard();
+      };
+
+      $('btnLogout').onclick = ()=>{ logout(); };
+
+      // quick-login buttons
+      $('loginAsStudent').onclick = ()=>{ const u=login('student','alumno1@esc.local','alumno'); if(u) renderDashboard(); else alert('Demo no cargado'); };
+      $('loginAsTeacher').onclick = ()=>{ const u=login('teacher','prof_martin@esc.local','prof'); if(u) renderDashboard(); else alert('Demo no cargado'); };
+      $('loginAsPreceptor').onclick = ()=>{ const u=login('preceptor','preceptor@esc.local','precep'); if(u) renderDashboard(); else alert('Demo no cargado'); };
+
+      // restore session
+      if(sessionStorage.getItem('pv_current')) renderDashboard();
+    });
+
+  </script>
+</body>
+</html>
